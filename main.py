@@ -2,6 +2,7 @@
 import bisect
 import datetime
 import paramiko
+from getpass import getpass
 
 def parse_timestamp(raw_str):
     tokens = raw_str.split()
@@ -256,11 +257,11 @@ def select_active_leases(leases_db, as_of_ts):
 
     return retarray
 
-def download_dhcpd_lesases():
+def download_dhcpd_lesases(d_pass):
     try:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect('192.168.5.10', username="root", password="vjyevtyn")
+        ssh.connect('192.168.5.10', username="root", password=d_pass)
         sftp = ssh.open_sftp()
         remotepath = '/var/lib/dhcp/dhcpd.leases'
         localpath = './tmp/dhcpd.leases'
@@ -274,7 +275,8 @@ def download_dhcpd_lesases():
 ##############################################################################
 
 # Загружаем dhcpd.leases
-download_dhcpd_lesases()
+d_pass = getpass("Domain password: ")
+download_dhcpd_lesases(d_pass)
 
 # Открываем dhcpd.leases
 myfile = open('./tmp/dhcpd.leases', 'r')
