@@ -3,6 +3,7 @@ import bisect
 import datetime
 import paramiko
 from getpass import getpass
+import os
 
 def parse_timestamp(raw_str):
     tokens = raw_str.split()
@@ -268,20 +269,37 @@ def download_dhcpd_lesases(d_pass):
         sftp.get(remotepath, localpath)
         sftp.close()
         ssh.close()
-    except NoValidConnectionsError as error:
-        print(f'Не удается подключится к DHCP серверу.')
-        return error
+        return True
+    except paramiko.ssh_exception.AuthenticationException as error:
+        print(f'Не удается подключится к DHCP серверу ({error}).')
+        return False
+
+def creating_dir(tmp_dir="./tmp"):
+    if os.path.isdir(tmp_dir):
+        return True
+    else:
+        try:
+            os.mkdir(tmp_dir)
+        except OSError:
+            return False
+        return True
 
 ##############################################################################
 
 # Загружаем dhcpd.leases
 d_pass = getpass("Domain password: ")
-download_dhcpd_lesases(d_pass)
-
-# Открываем dhcpd.leases
-myfile = open('./tmp/dhcpd.leases', 'r')
-leases = parse_leases_file(myfile)
-myfile.close()
+if creating_dir():
+    if download_dhcpd_lesases(d_pass):
+        # Открываем dhcpd.leases
+        myfile = open('./tmp/dhcpd.leases', 'r')
+        leases = parse_leases_file(myfile)
+        myfile.close()
+    else:
+        print("Не удалось открыть dhcp.leases.")
+        quit()
+else:
+    print(f"Создать директорию 'tmp' не удалось.")
+    quit()
 
 # Читаем dhcpd.leases
 now = timestamp_now()
