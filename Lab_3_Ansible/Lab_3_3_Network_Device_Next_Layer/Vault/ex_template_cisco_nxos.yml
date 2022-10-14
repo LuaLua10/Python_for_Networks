@@ -1,0 +1,10 @@
+---
+- name: Ansible Group and Host Varibles
+  hosts: localhost
+
+  tasks:
+    - name: create router configuration files
+      template: 
+        src=~/git/Python_for_Networks/Lab_3_Ansible/Lab_3_3_Network_Device_Next_Layer/Vault/nxos.j2
+        dest=~/git/Python_for_Networks/Lab_3_Ansible/Lab_3_3_Network_Device_Next_Layer/Vault/{{ item.key }}.conf
+      with_dict: "{{ nexus_devices }}"

@@ -1,0 +1,6 @@
+[nxosv-devices]
+nxos-r1 ansible_host=192.168.4.47
+nxos-r2 ansible_host=192.168.4.48
+
+[spines]
+nxos-r1 ansible_host=192.168.4.47

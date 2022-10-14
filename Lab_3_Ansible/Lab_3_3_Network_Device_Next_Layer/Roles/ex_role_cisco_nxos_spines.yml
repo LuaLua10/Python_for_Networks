@@ -1,0 +1,9 @@
+---
+- name: playbook for spine role
+  hosts: "nxosv-devices"
+  gather_facts: false
+  connection: local
+
+  roles: 
+    - nxosv-devices
+    - spines

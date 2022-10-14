@@ -1,0 +1,19 @@
+---
+- name: IOS Command Output
+  hosts: "ios-devices"
+  gather_facts: false
+  connection: network_cli
+
+  tasks:
+    - name: show hostname
+      ios_command:
+        commands:
+            - show run | i hostname
+
+      register: output
+
+    - name: config example
+      when: '"IOS_R_1" in "{{ output.stdout }}"'
+      ios_config:
+        lines:
+          - logging buffered 30000

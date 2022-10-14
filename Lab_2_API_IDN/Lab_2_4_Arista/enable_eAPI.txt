@@ -1,0 +1,6 @@
+# arista1(config)#management api http-commands
+# arista1(config-mgmt-api-http-cmds)#management api http-commands
+# arista1(config-mgmt-api-http-cmds)#protocol https port 443
+# arista1(config-mgmt-api-http-cmds)#no protocol http
+# arista1(config-mgmt-api-http-cmds)#vrf management
+

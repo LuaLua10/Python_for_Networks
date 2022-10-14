@@ -1,0 +1,6 @@
+---
+- hosts: all
+
+  tasks:
+    - name: check disk usage
+      shell: df > df_temp.txt

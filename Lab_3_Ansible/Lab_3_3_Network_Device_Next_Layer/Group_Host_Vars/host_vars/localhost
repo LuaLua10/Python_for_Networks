@@ -1,0 +1,22 @@
+---
+nexus_devices: 
+        "nxos_r1": 
+            "hostname": "nxos_r1"
+            "username": "{{ username }}"
+            "password": "{{ password }}"
+            "vlans": [400, 500, 600]
+            "l3_vlan_interfaces": True
+            "vlan_interfaces": [
+                {"int_num": "400", "ip": "172.16.40.1"},
+                {"int_num": "500", "ip": "172.16.50.1"},
+                {"int_num": "600", "ip": "172.16.60.1"}
+            ]
+            "netflow_enable": True
+
+        "nxos_r2": 
+            "hostname": "nxos_r2"
+            "username": "{{ username }}"
+            "password": "{{ password }}"
+            "vlans": [400, 500, 600]
+            "l3_vlan_interfaces": False
+            "netflow_enable": False

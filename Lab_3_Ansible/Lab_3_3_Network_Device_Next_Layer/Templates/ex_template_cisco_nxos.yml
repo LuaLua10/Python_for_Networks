@@ -1,0 +1,36 @@
+---
+- name: Template Looping
+  hosts: localhost
+
+  vars:
+    nexus_devices: {
+        "nxos_r1": {
+            "hostname": "nxos_r1",
+            "username": "cisco",
+            "password": "cisco",
+            "vlans": [400, 500, 600],
+            "l3_vlan_interfaces": True,
+            "vlan_interfaces": [
+                {"int_num": "400", "ip": "172.16.40.1"},
+                {"int_num": "500", "ip": "172.16.50.1"},
+                {"int_num": "600", "ip": "172.16.60.1"}
+            ],
+            "netflow_enable": True
+        },
+        "nxos_r2": {
+            "hostname": "nxos_r2",
+            "username": "cisco",
+            "password": "cisco",
+            "vlans": [400, 500, 600],
+            "l3_vlan_interfaces": False,
+            "netflow_enable": False
+        }
+    }
+  tasks:
+    - name: create router configuration files
+      template:
+        src=~/git/Python_for_Networks/Lab_3_Ansible/Lab_3_3_Network_Device_Next_Layer/Templates/nxos.j2
+        dest=~/git/Python_for_Networks/Lab_3_Ansible/Lab_3_3_Network_Device_Next_Layer/Templates/{{ item.key }}.conf
+      with_dict: "{{ nexus_devices }}"
+
+      
