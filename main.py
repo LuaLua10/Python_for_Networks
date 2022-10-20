@@ -4,6 +4,7 @@ import datetime
 import paramiko
 from getpass import getpass
 import os
+import pytz
 
 def parse_timestamp(raw_str):
     tokens = raw_str.split()
@@ -16,8 +17,11 @@ def parse_timestamp(raw_str):
             raise Exception('Parse error in timestamp')
 
     elif len(tokens) == 3:
-        return datetime.datetime.strptime(' '.join(tokens[1:]),
-                                          '%Y/%m/%d %H:%M:%S')
+        dt_utc_0 = datetime.datetime.strptime(' '.join(tokens[1:]), '%Y/%m/%d %H:%M:%S')
+        local_tz = pytz.timezone('Europe/Moscow')
+        local_dt = dt_utc_0.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        return datetime.datetime(local_dt.year, local_dt.month, local_dt.day, local_dt.hour, local_dt.minute,
+                             local_dt.second + (0 if local_dt.microsecond < 500000 else 1))
 
     else:
         raise Exception('Parse error in timestamp')
@@ -227,7 +231,7 @@ def round_timedelta(tdelta):
 
 
 def timestamp_now():
-    n = datetime.datetime.utcnow()
+    n = datetime.datetime.now()
     return datetime.datetime(n.year, n.month, n.day, n.hour, n.minute,
                              n.second + (0 if n.microsecond < 500000 else 1))
 
@@ -258,11 +262,11 @@ def select_active_leases(leases_db, as_of_ts):
 
     return retarray
 
-def download_dhcpd_lesases(d_pass):
+def download_dhcpd_lesases(d_ip_add,d_pass,d_user='root'):
     try:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect('192.168.5.10', username="root", password=d_pass)
+        ssh.connect(d_ip_add, username=d_user, password=d_pass)
         sftp = ssh.open_sftp()
         remotepath = '/var/lib/dhcp/dhcpd.leases'
         localpath = './tmp/dhcpd.leases'
@@ -286,10 +290,13 @@ def creating_dir(tmp_dir="./tmp"):
 
 ##############################################################################
 
-# Загружаем dhcpd.leases
+d_user = 'root'
 d_pass = getpass("Domain password: ")
+d_ip_add = '192.168.5.10'
+
+# Загружаем dhcpd.leases
 if creating_dir():
-    if download_dhcpd_lesases(d_pass):
+    if download_dhcpd_lesases(d_ip_add,d_pass,d_user):
         # Открываем dhcpd.leases
         myfile = open('./tmp/dhcpd.leases', 'r')
         leases = parse_leases_file(myfile)
@@ -321,5 +328,5 @@ for lease in report_dataset:
           lease['client-hostname'])
 print('+-----------------+-------------------+----------------------+-----------------+-------+--------------------+---------------')
 print('| Total Active Leases: ' + str(len(report_dataset)))
-print('| Report generated (UTC): ' + str(now))
+print('| Report generated: ' + str(now))
 print('+---------------------------------------------------------------------------------------------------------------------------')
