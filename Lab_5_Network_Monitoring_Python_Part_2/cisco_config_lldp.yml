@@ -1,0 +1,16 @@
+---
+- name: Enable LLDP
+  hosts: "devices"
+  gather_facts: false
+  connection: network_cli
+
+  tasks:
+    - name: Enable LLDP service
+      cisco.ios.ios_lldp:
+        state: present
+
+      register: output
+
+    - name: show output
+      debug:
+        var: output

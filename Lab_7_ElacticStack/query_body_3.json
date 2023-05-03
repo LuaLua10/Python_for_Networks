@@ -1,0 +1,21 @@
+
+{
+  "query": {
+    "bool": {
+      "must": {
+        "term": {
+          "source.ip": "185.49.108.7"
+        }
+      },
+      "filter": [
+        {
+        "range": {
+          "@timestamp": {
+            "gte": "now-10m"
+          }
+        }
+      }
+      ]
+    }
+  }
+}

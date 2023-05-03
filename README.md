@@ -1,2 +1,2 @@
-# Python_for_Networks
+# Python for Networks
 Python Networks Labs

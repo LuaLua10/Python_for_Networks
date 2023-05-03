@@ -1,0 +1,9 @@
+[devices]
+SW10
+SW9
+SW11
+SW12
+
+[edge-devices]
+SW10
+SW11
