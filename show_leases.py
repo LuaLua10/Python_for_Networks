@@ -1,10 +1,14 @@
 #!/usr/bin/python
 import bisect
 import datetime
-import paramiko
-from getpass import getpass
 import os
 import pytz
+from netaddr import *
+from config import *
+import sys
+import re
+import subprocess
+
 
 def parse_timestamp(raw_str):
     tokens = raw_str.split()
@@ -21,7 +25,7 @@ def parse_timestamp(raw_str):
         local_tz = pytz.timezone('Europe/Moscow')
         local_dt = dt_utc_0.replace(tzinfo=pytz.utc).astimezone(local_tz)
         return datetime.datetime(local_dt.year, local_dt.month, local_dt.day, local_dt.hour, local_dt.minute,
-                             local_dt.second + (0 if local_dt.microsecond < 500000 else 1))
+                                 local_dt.second + (0 if local_dt.microsecond < 500000 else 1))
 
     else:
         raise Exception('Parse error in timestamp')
@@ -100,6 +104,7 @@ def parse_rewind_binding_state(raw_str):
     else:
         raise Exception('Parse error in next binding state')
 
+
 def parse_option82(raw_str):
     tokens = raw_str.split()
 
@@ -118,6 +123,7 @@ def parse_option82(raw_str):
             raise Exception('Parse error in option82')
     else:
         raise Exception('Parse error in option82')
+
 
 def parse_leases_file(leases_file):
     valid_keys = {
@@ -262,21 +268,48 @@ def select_active_leases(leases_db, as_of_ts):
 
     return retarray
 
-def download_dhcpd_lesases(d_ip_add,d_pass,d_user='root'):
+
+def mac_vendor(current_mac):
+    mac = EUI(current_mac)
     try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(d_ip_add, username=d_user, password=d_pass)
-        sftp = ssh.open_sftp()
-        remotepath = '/var/lib/dhcp/dhcpd.leases'
-        localpath = './tmp/dhcpd.leases'
-        sftp.get(remotepath, localpath)
-        sftp.close()
-        ssh.close()
+        vendor = mac.oui.registration().org
+        return vendor
+    except NotRegisteredError:
+        return 'unknown vendor'
+
+
+def download_file(hostname, username, remote_path, local_path,
+                  ssh_key_path=os.path.join(os.path.expanduser('~'), ".ssh", "id_rsa")):
+    """
+    Downloads a file from a remote server via SSH using key authentication.
+
+    Args:
+        hostname (str): The hostname or IP address of the remote server.
+        username (str): The SSH username.
+        remote_path (str): The path of the file on the remote server.
+        local_path (str): The path to save the file locally.
+
+    Returns:
+        True if the file was downloaded successfully, False otherwise.
+    """
+    try:
+        # Construct the SSH command
+        ssh_command = [
+            'scp',
+            '-i', os.path.expanduser(ssh_key_path),  # SSH key path
+            f'{username}@{hostname}:{remote_path}',  # remote path
+            local_path  # local path
+        ]
+
+        # Run the SCP command using subprocess
+        subprocess.run(ssh_command, check=True)
+
+        print(f"File downloaded from {hostname}:{remote_path} to {local_path}")
         return True
-    except paramiko.ssh_exception.AuthenticationException as error:
-        print(f'Не удается подключится к DHCP серверу ({error}).')
+    except subprocess.CalledProcessError as e:
+        print(f"Error downloading file: {e}")
         return False
+
 
 def creating_dir(tmp_dir="./tmp"):
     if os.path.isdir(tmp_dir):
@@ -288,45 +321,91 @@ def creating_dir(tmp_dir="./tmp"):
             return False
         return True
 
-##############################################################################
 
-d_user = 'root'
-d_pass = getpass("Domain password: ")
-d_ip_add = '192.168.5.10'
-
-# Загружаем dhcpd.leases
-if creating_dir():
-    if download_dhcpd_lesases(d_ip_add,d_pass,d_user):
-        # Открываем dhcpd.leases
-        myfile = open('./tmp/dhcpd.leases', 'r')
-        leases = parse_leases_file(myfile)
-        myfile.close()
-    else:
-        print("Не удалось открыть dhcp.leases.")
-        quit()
-else:
-    print(f"Создать директорию 'tmp' не удалось.")
-    quit()
-
-# Читаем dhcpd.leases
-now = timestamp_now()
-report_dataset = select_active_leases(leases, now)
-
-print('+---------------------------------------------------------------------------------------------------------------------------')
-print('| DHCPD ACTIVE LEASES REPORT')
-print('+-----------------+-------------------+----------------------+-----------------+-------+--------------------+---------------')
-print('| IP Address      | MAC Address       | Started (days,H:M:S) | Expires (H:M:S) | Ports | Switch MAC Address | Hostname ')
-print('+-----------------+-------------------+----------------------+-----------------+-------+--------------------+---------------')
-
-for lease in report_dataset:
+def show_in_cli(lease):
     print('| ' + format(lease['ip_address'], '<15') + ' | ' + \
           format(lease['hardware'], '<17') + ' |' + \
+          format(mac_vendor(lease['hardware']), '<55') + ' |' + \
           format(str(lease['starts']), '>21') + ' | ' + \
           format(str((lease['ends'] - now) if lease['ends'] != 'never' else 'never'), '>15') + ' | ' + \
           format(str(lease['option agent.circuit-id']), '<5') + ' | ' + \
           format(str(lease['option agent.remote-id']), '<18') + ' | ' + \
           lease['client-hostname'])
-print('+-----------------+-------------------+----------------------+-----------------+-------+--------------------+---------------')
-print('| Total Active Leases: ' + str(len(report_dataset)))
-print('| Report generated: ' + str(now))
-print('+---------------------------------------------------------------------------------------------------------------------------')
+
+
+def main(mode, filter=None):
+
+    global now
+
+    if mode == 'local':
+        # Открываем dhcpd.leases
+        try:
+            myfile = open(leases_local_path, 'r')
+            leases = parse_leases_file(myfile)
+            myfile.close()
+        except FileNotFoundError:
+            print(f'Файл {leases_local_path} не найден!')
+            quit()
+    elif mode == 'remote':
+        # Загружаем dhcpd.leases
+        if creating_dir():
+            # if download_dhcpd_lesases(d_ip_add,d_pass,d_user):
+            if download_file(ip_remote_dhcp_server, user_remote_dhcp_server, leases_remote_path, leases_download_path, ssh_key_path):
+                # Открываем dhcpd.leases
+                myfile = open('./tmp/dhcpd.leases', 'r')
+                leases = parse_leases_file(myfile)
+                myfile.close()
+            else:
+                print("Не удалось открыть dhcp.leases.")
+                quit()
+        else:
+            print(f"Создать директорию 'tmp' не удалось.")
+            quit()
+    else:
+        print('Введите корректный режим работы (local или remote)!')
+        quit()
+
+    # Читаем dhcpd.leases
+    now = timestamp_now()
+    report_dataset = select_active_leases(leases, now)
+
+    print(
+        '+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
+    print('| DHCPD ACTIVE LEASES REPORT')
+    print(
+        '+-----------------+-------------------+--------------------------------------------------------+----------------------+-----------------+-------+--------------------+---------------')
+    print(
+        '| IP Address      | MAC Address       | MAC Vendor                                             |Started (days,H:M:S)  | Expires (H:M:S) | Port  | Switch MAC Address | Hostname ')
+    print(
+        '+-----------------+-------------------+--------------------------------------------------------+----------------------+-----------------+-------+--------------------+---------------')
+
+    cur_number_leases = 0
+    for lease in report_dataset:
+        if filter is not None:
+            for f in filter:
+                ip_result = re.match(f, lease['ip_address'])
+                hw_result = re.match(f, lease['hardware'])
+                sw_hw_result = re.match(f, lease['option agent.remote-id'])
+                if ip_result is not None or hw_result is not None or sw_hw_result is not None:
+                    cur_number_leases += 1
+                    show_in_cli(lease)
+        else:
+            show_in_cli(lease)
+
+    print(
+        '+-----------------+-------------------+--------------------------------------------------------+----------------------+-----------------+-------+--------------------+---------------')
+    if filter is not None:
+        print('| Total Filtered Active Leases: ' + str(cur_number_leases))
+    print('| Total Active Leases: ' + str(len(report_dataset)))
+    print('| Report generated: ' + str(now))
+    print(
+        '+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
+
+
+if __name__ == "__main__":
+    mode = sys.argv[1]
+    filter = sys.argv[2:]
+    if len(filter) != 0:
+        main(mode, filter)
+    else:
+        main(mode)
